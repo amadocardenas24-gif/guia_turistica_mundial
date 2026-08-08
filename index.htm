@@ -281,7 +281,365 @@
             }
             document.getElementById("camaraVideo").srcObject = null;
 
-            posicionUsuario = null;
+            posicionUsuario = null;<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Protocolo Infinitum | Visor Efímero</title>
+    <style>
+        :root {
+            --bg: #030712;
+            --accent: #00ffea;
+            --accent-glow: rgba(0, 255, 234, 0.4);
+            --panel: rgba(10, 15, 25, 0.88);
+            --border: rgba(0, 255, 234, 0.3);
+            --text-main: #e2e8f0;
+            --text-dim: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: monospace;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text-main);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .frame-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            filter: invert(90%) hue-rotate(180deg) contrast(110%);
+        }
+
+        .control-panel {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 92%;
+            max-width: 420px;
+            z-index: 10;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 25px var(--accent-glow);
+        }
+
+        button {
+            background: linear-gradient(135deg, rgba(0, 255, 234, 0.1), rgba(0, 120, 110, 0.2));
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 16px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-family: monospace;
+            font-weight: bold;
+            width: 100%;
+            box-shadow: 0 0 20px rgba(0, 255, 234, 0.15);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        button:hover {
+            background: rgba(0, 255, 234, 0.15);
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        .status-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 234, 0.1);
+        }
+
+        #log {
+            font-size: 0.85rem;
+            color: var(--accent);
+            text-shadow: 0 0 8px rgba(0, 255, 234, 0.3);
+        }
+
+        .flag-badge {
+            font-size: 1.4rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 8px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-matrix {
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 130px;
+            overflow-y: auto;
+        }
+
+        .matrix-item {
+            background: rgba(0, 0, 0, 0.4);
+            border-left: 3px solid var(--accent);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .matrix-item span {
+            color: var(--text-main);
+            font-weight: bold;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="frame-container">
+        <iframe id="mapFrame" src="about:blank"></iframe>
+    </div>
+
+    <div class="control-panel">
+        <div class="status-header">
+            <span id="log">Sistema sin memoria preparado...</span>
+            <span id="flagIcon" class="flag-badge">🌐</span>
+        </div>
+
+        <button id="mainButton" onclick="activarProtocolo()">
+            <span>INICIAR PROTOCOLO</span>
+        </button>
+
+        <div id="matrixContainer" class="info-matrix"></div>
+    </div>
+
+    <script>
+        let escuchandoActivo = false;
+
+        function limpiarMemoria() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            escuchandoActivo = false;
+            document.getElementById('matrixContainer').innerHTML = '';
+        }
+
+        function obtenerBanderaUnicode(countryCode) {
+            return countryCode.toUpperCase().replace(/./g, char => 
+                String.fromCodePoint(127397 + char.charCodeAt(0))
+            );
+        }
+
+        function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; 
+        }
+
+        function hablar(texto, callback) {
+            if ('speechSynthesis' in window) {
+                const mensaje = new SpeechSynthesisUtterance(texto);
+                const idiomaNativo = navigator.language || 'es-ES';
+                mensaje.lang = idiomaNativo;
+                mensaje.onend = () => {
+                    if (callback) {
+                        setTimeout(callback, 500);
+                    }
+                };
+                window.speechSynthesis.speak(mensaje);
+            } else if (callback) {
+                setTimeout(callback, 500);
+            }
+        }
+
+        function activarProtocolo() {
+            if (escuchandoActivo) return;
+            limpiarMemoria();
+
+            const log = document.getElementById('log');
+            const flagIcon = document.getElementById('flagIcon');
+            log.innerText = "Leyendo coordenadas GPS...";
+
+            if (!navigator.geolocation) {
+                log.innerText = "GPS no soportado.";
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+
+                let codigoPais = "br";
+                try {
+                    const respuesta = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+                    const datos = await respuesta.json();
+                    if (datos && datos.address && datos.address.country_code) {
+                        codigoPais = datos.address.country_code;
+                    }
+                } catch (error) {
+                    codigoPais = "br";
+                }
+
+                flagIcon.innerText = obtenerBanderaUnicode(codigoPais);
+
+                const iframe = document.getElementById('mapFrame');
+                iframe.src = `https://www.google.com/maps?q=${lat},${lon}&output=embed`;
+
+                log.innerText = "Ubicación fijada. Escuchando...";
+
+                hablar("¿Qué deseas buscar? Hable ahora.", () => {
+                    iniciarMic(log, lat, lon);
+                });
+
+            }, () => {
+                escuchandoActivo = false;
+                log.innerText = "Error de GPS.";
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        }
+
+        function iniciarMic(log, lat, lon) {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) {
+                log.innerText = "Voz no soportada.";
+                return;
+            }
+
+            const rec = new SpeechRec();
+            rec.lang = navigator.language || 'es-ES';
+            rec.continuous = false;
+            rec.interimResults = false;
+
+            escuchandoActivo = true;
+
+            rec.onresult = async (evento) => {
+                escuchandoActivo = false;
+                const palabra = evento.results[0][0].transcript.toLowerCase().trim();
+                log.innerText = `Buscando: "${palabra}"`;
+
+                const iframe = document.getElementById('mapFrame');
+                const queryCodificada = encodeURIComponent(palabra);
+                iframe.src = `https://www.google.com/maps?q=${queryCodificada}&sll=${lat},${lon}&output=embed`;
+
+                const matrixContainer = document.getElementById('matrixContainer');
+                
+                try {
+                    const delta = 10 / 111;
+                    const viewbox = `${lon - delta},${lat + delta},${lon + delta},${lat - delta}`;
+                    
+                    const resBusqueda = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${queryCodificada}&bounded=1&viewbox=${viewbox}&limit=10`);
+                    const resultados = await resBusqueda.json();
+
+                    if (resultados && resultados.length > 0) {
+                        let puntosProximidad = resultados.map(lugar => {
+                            const distanciaKm = calcularDistanciaHaversine(lat, lon, parseFloat(lugar.lat), parseFloat(lugar.lon));
+                            return {
+                                nombre: lugar.display_name.split(',')[0],
+                                distVal: distanciaKm,
+                                distTexto: distanciaKm < 1 ? Math.round(distanciaKm * 1000) + " m" : distanciaKm.toFixed(1) + " km"
+                            };
+                        }).filter(p => p.distVal <= 10);
+
+                        puntosProximidad.sort((a, b) => a.distVal - b.distVal);
+
+                        if (puntosProximidad.length > 0) {
+                            const topTres = puntosProximidad.slice(0, 3);
+                            const etiquetas = ["Más cercano", "Intermedio", "Más lejano"];
+
+                            let textoVoz = `Resultados cercanos para ${palabra}.`;
+
+                            topTres.forEach((p, index) => {
+                                const etiqueta = etiquetas[index] || "Punto";
+                                setTimeout(() => {
+                                    const item = document.createElement('div');
+                                    item.className = 'matrix-item';
+                                    item.innerHTML = `<span>${etiqueta} (${p.distTexto})</span> ${p.nombre}`;
+                                    matrixContainer.appendChild(item);
+                                }, index * 300);
+                                textoVoz += ` A ${p.distTexto}, ${p.nombre}.`;
+                            });
+
+                            hablar(textoVoz, () => {
+                                log.innerText = "Ciclo finalizado. Sin memoria.";
+                            });
+                        } else {
+                            log.innerText = `Sin resultados a 10 km de: "${palabra}"`;
+                            hablar(`No hay resultados cercanos.`);
+                        }
+                    } else {
+                        log.innerText = `Sin registros locales para: "${palabra}"`;
+                        hablar(`Búsqueda sin registros cercanos.`);
+                    }
+                } catch (err) {
+                    log.innerText = `Cargado: "${palabra}"`;
+                }
+            };
+
+            rec.onerror = () => {
+                escuchandoActivo = false;
+                log.innerText = "Audio no detectado. Reintente.";
+            };
+
+            rec.onend = () => {
+                escuchandoActivo = false;
+            };
+
+            try {
+                rec.start();
+            } catch (err) {
+                escuchandoActivo = false;
+                log.innerText = "Error en micrófono.";
+            }
+        }
+    </script>
+</body>
+</html>
             gpsConectado = false;
             
             document.getElementById("cuerpoApp").style.backgroundColor = "#0b0b0b";
